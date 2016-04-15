@@ -1,4 +1,28 @@
 #!/usr/bin/python
+########################## IMPORTS AND AUXILIARY CLASSES ###############################
+import os, threading, signal, collections, re, more_itertools
+import time
+import Queue
+from subprocess import Popen, PIPE, STDOUT
+from gi.repository import Gtk, GObject, GLib
+from gi.repository import AppIndicator3 as AppIndicator
+from gi.repository import Notify
+
+class MessagePattern():
+    def __init__(self,pattern,icon=None, statustext=r"\g<0>", notify=False, notifyicon="", notifyheading="", notifytext="", filelisttext="", terminate=False):
+        self.pattern = re.compile(pattern,re.I) #re.I means ignore case
+        self.icon = icon
+        self.statustext = statustext
+        self.notify = notify
+        self.notifyicon = notifyicon
+        self.notifyheading = notifyheading
+        self.notifytext = notifytext
+        self.filelisttext = filelisttext
+        self.terminate = terminate
+    def show(self):
+        txt = self.pattern.pattern + "\n   -->"
+        if self.icon: txt = txt + self.icon
+        print txt
 ##################################  SETTINGS  ########################################
 # LIST OF COMMANDS executed, 
 # given as a list of tuples of the form (description, command).
@@ -16,36 +40,51 @@ DEFAULTS = [
     (None, False, None)   # at the first /re/start, first command is deselected
     ]
          
-# ICONS SHOWN IN THE PANEL
-# (1) icons associated with important messages:
-#     ICONS_MESSAGES is a list of tuples in the format
-#       ([msg1, msg2, ...], icon),
-#     where msg1, msg2, ... are the messages from backintime/unison/... associated with icon
-# (2) icons indicating normal operation:
-#     when output from backintime/unison/... does not match any of the above messages,
-#     the panel icon simply iterates over the icons in ICONS_WORKING
-# (3) when waiting for user input, ICON_WAITING is shown
-ICONS_MESSAGES = (
-    (["Alles OK","Synchronization complete","Nothing to do: replicas have not changed"],
-     "emblem-default"
-    ),
-    (["Fehler",
-      "Keine Verbindung",
-      "Fatal error: Lost connection with the server"],
-     "process-stop"
-    )
-)
-ICONS_WORKING = ["network-transmit","network-receive"]
-ICON_WAITING =  "network-transmit-receive"
+# KNOWN MESSAGES
+ICONS_WORKING = ["network-transmit","network-receive"]#ubuntu-client-updating
+ICON_WAITING =  "network-idle"    #ubuntuone-client-paused"
+ICON_GOOD = "emblem-default"      #ubuntuone-client-idle
+ICON_ERROR = "process-stop"       #ubuntuone-client-error
 END_OF_SUBPROCESS = "UNISON-WRAPPER: Subprocess has terminated"
-########################## IMPORTS AND AUXILIARY CLASSES ###############################
-import os, threading, signal
-import time
-import Queue
-from subprocess import Popen, PIPE, STDOUT
-from gi.repository import Gtk, GObject, GLib
-from gi.repository import AppIndicator3 as AppIndicator
-from gi.repository import Notify
+PATTERNS = []
+#PATTERNS.append(MessagePattern(pattern=r"(Alles Ok)",icon=ICON_GOOD,notifyheading=r"\1",notifytext=r"Did you know that?"))
+#PATTERNS.append(MessagePattern(pattern=r"(Fehler)",icon=ICON_ERROR,notifyheading=r"\1",notifytext=r"\1"))
+#PATTERNS.append(MessagePattern(pattern=r"(Keine Verbindung)",icon=ICON_ERROR,notifyheading=r"\1",notifytext=r"\1"))
+#PATTERNS.append(MessagePattern(pattern=r"(\d+).*(Keine Nachricht)",filelisttext=r"\1"))
+#PATTERNS.append(MessagePattern(pattern=r"(A)",icon=ICON_GOOD,notifyheading=r"\1",notifytext=r"Did you know that?"))
+#PATTERNS.append(MessagePattern(pattern=r"B",icon=ICON_ERROR))
+#PATTERNS.append(MessagePattern(pattern=r"F",icon="gtk-home"))
+PATTERNS.append(MessagePattern(pattern=r"\[END\]\s+Updating file\s+(.*/)*([^/]+)", 
+                               filelisttext=r" \2"))
+PATTERNS.append(MessagePattern(pattern=r"\[END\]\s+Copying\s+(.*/)*([^/]+)", 
+                               filelisttext=r"*\2"))
+PATTERNS.append(MessagePattern(pattern=r"\[END\]\s+Deleting\s+(.*/)*([^/]+)", 
+                               filelisttext=r"[\2]"))
+PATTERNS.append(MessagePattern(pattern=r"(Synchronization complete).* \((\d+[^)]*)\)", 
+                               notifyheading=r"\1",
+                               notifytext=r"\2",
+                               icon=ICON_GOOD))
+PATTERNS.append(MessagePattern(pattern=r"(Nothing to do: .*)",
+                               icon=ICON_GOOD))
+PATTERNS.append(MessagePattern(pattern=r"(Fatal error): (.*)",
+                               notifyheading=r"\1",
+                               notifytext=r"\2",
+                               icon=ICON_ERROR))
+PATTERNS.append(MessagePattern(pattern=r"(Error): (.*)",
+                               notifyheading=r"\1",
+                               notifytext=r"\2",
+                               icon=ICON_ERROR))
+PATTERNS.append(MessagePattern(pattern=r"(Error) (.*)",
+                               notifyheading=r"\1",
+                               notifytext=r"\g<0>",
+                               icon=ICON_ERROR))
+PATTERNS.append(MessagePattern(pattern=r"File name too long",
+                               notifyheading=r"Error",
+                               notifytext=r"\g<0>",
+                               icon=ICON_ERROR))
+PATTERNS.append(MessagePattern(pattern=END_OF_SUBPROCESS,
+                               statustext="",
+                               terminate=True))
 ############################### ACTUAL PROGRAM #########################################
 # PROGRAM STATES:
 # (A) Waiting
@@ -76,28 +115,36 @@ class MyIndicator:
         Notify.init("unison-indicator")
         self.notification = Notify.Notification.new("<b>Unison</b>","",None) # balloon notification
         self.wrapper = wrapper
-        self.icons_messages = tuple(
-            ([self.__standardize(message) for message in message_list],icon)
-            for message_list,icon in ICONS_MESSAGES)
-        print "Known messages:"
-        print "\n".join(["  " + "\n  ".join(message_list) + "\n  -> icon: " + icon
-            for message_list,icon in self.icons_messages])
+        self.statuslist = collections.deque(maxlen=30)
+        self.filelist = collections.deque(maxlen=30)
+
+        self.known_messages = PATTERNS
+        #print "Known messages:"
+        #for m in self.known_messages:
+        #    m.show()
+
         self.icons_working = ICONS_WORKING
         self.icon_waiting = ICON_WAITING
+
         def build_menu():
+            self.menu = Gtk.Menu()
+            self.menu_filelist = Gtk.Menu()
+
             self.item_start   = Gtk.MenuItem('Start ...')
             self.item_quit    = Gtk.MenuItem('Quit')
-            self.item_sep     = Gtk.SeparatorMenuItem()
-            self.item_status =  Gtk.MenuItem('[No processes started.]')
-            self.item_start.connect('activate', self.wrapper.restart)
+            self.item_filelist = Gtk.MenuItem('Recently changed files')
+            self.menu_filelist.append(Gtk.MenuItem('--'))
+            self.item_status = Gtk.MenuItem('')
             self.item_status.connect('activate',self.show_status_in_dialog)
+            self.item_start.connect('activate', self.wrapper.restart)
             self.item_quit.connect('activate', self.wrapper.quit)
-            self.menu = Gtk.Menu()
-            self.appindicator.set_menu(self.menu)
-            self.status_message = "Please select processes to start in the main dialog."
-            menu_items = [self.item_start,self.item_quit,self.item_sep,self.item_status]
+            self.item_filelist.set_submenu(self.menu_filelist)
+            
+            menu_items = [self.item_filelist,self.item_status,Gtk.SeparatorMenuItem(),self.item_start,self.item_quit]
             for item in menu_items:
                 self.menu.append(item)
+            self.appindicator.set_menu(self.menu)
+            self.statuslist.appendleft("[No process started]")
             self.menu.show_all()
         build_menu()
         self.set_state(STATE_WAITING) 
@@ -118,8 +165,8 @@ class MyIndicator:
     def show_status_in_dialog(self,source):
         """Shows a message dialog displaying the full current status message;
            called when user clicks on the (shortened) status message in the panel menu"""        
-        dialog = Gtk.MessageDialog(type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, message_format=self.status_message)
-        dialog.format_secondary_text("For further details please consult the log-file.")
+        dialog = Gtk.MessageDialog(type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, message_format="Back-in-time/unison report:")
+        dialog.format_secondary_text(">> "+"\n>> ".join(reversed(self.statuslist)) + "\n\nFor further details, please consult the log-file.")
         dialog.run()
         dialog.destroy()
     
@@ -131,71 +178,94 @@ class MyIndicator:
     # runs indefinitly in a separate thread self.watch_thread
     # The main difficulty is to catch the message when the "subprocesses have terminated"
     # and display the _previous_ message in this case:
-        def get_last_item_in(q):
-            last_val = q.get(block=True)
-            prev_val = None
+        class TempData: pass
+        def process_message(msg,temp):
+            msg = msg.strip()
+            if msg == "":
+                return temp
+            print "processing " + msg
+            for p in self.known_messages:
+                m = p.pattern.match(msg)
+                if m:
+                    print "MATCH with " + str(p.pattern.pattern)
+                    temp.terminate = p.terminate
+                    temp.icon = p.icon
+                    st = m.expand(p.statustext)
+                    flt = m.expand(p.filelisttext)
+                    nh = m.expand(p.notifyheading)
+                    if st: self.statuslist.appendleft(st)
+                    if flt: 
+                        self.filelist.appendleft(flt)
+                        self.filelist = collections.deque(list(more_itertools.unique_everseen(self.filelist)),maxlen = self.filelist.maxlen)
+                    if nh: 
+                        temp.notifyheading = nh
+                        temp.notifytext = m.expand(p.notifytext)
+                        temp.notifyicon = p.icon
+                    #print "-> groups: " + ", ".join(m.groups())
+                    #print "-> notify-heading: " + temp.notifyheading + " [" + p.notifyheading + "]"
+                    #print "-> notify-text: " + temp.notifytext + " [" + p.notifytext + "]"
+                    #print "-> log: " + m.expand(p.filelisttext)
+                    return temp
+            # Unknown messages are added to menu without any alterations.
+            # The only known message that currently appears only in altered form in the menu
+            # is the "end of process" --- it does not appear at all.
+            self.statuslist.appendleft(msg)
+            return temp
+
+        def process_queue(q,temp):
+            msg = q.get(block=True)
+            temp = process_message(msg,temp)
             q.task_done()
             try:
                 while True:
-                    temp = q.get(block=False) 
-                    prev_val = last_val
-                    last_val = temp
+                    msg = q.get(block=False) 
+                    temp = process_message(msg,temp)
                     q.task_done()                  
             except Queue.Empty:
-                return (last_val,prev_val)
-        while True:          
-            (last_msg,prev_msg) = get_last_item_in(self.message_queue)
-            if last_msg == END_OF_SUBPROCESS:
-                msg = prev_msg
-                terminate = True
-            else:
-                msg = last_msg
-                terminate = False
-            if msg: self.__update_status(msg)
-            if terminate: GLib.idle_add(self.wrapper.stop, None)
+                return temp
+            return temp# this line should never be reached, but the interpreter wants it here
+
+        while True:
+            temp = TempData()
+            temp.terminate = False
+            temp.icon = None
+            temp.notifyheading = ""
+            temp.notifytext = ""
+            temp.notifyicon = None
+            temp = process_queue(self.message_queue,temp)
+            GLib.idle_add(self.__update_appearances,temp.icon,temp.notifyheading,temp.notifytext,temp.notifyicon)
+            if temp.terminate:
+                GLib.idle_add(self.wrapper.stop, None)
             time.sleep(0.2)
-            
-    def __update_status(self,msg):
-        # for the use of GLib.idle_add in this function, see
-        # wiki.gnome.org/Projects/PyGObject/Threading
-        def update_icon(icon):
-            if self.state == STATE_RUNNING:
-                self.appindicator.set_icon(icon)
-            return False
-        def update_status_display(text):
-            if len(text) > 50:
-                text = text[0:48] + " ..."
-            text = "[" + time.strftime("%H:%M") + "] " + text
-            print "Status:  " +  text
-            self.item_status.get_child().set_text(text)
-            return False
-        def update_notification(text,icon):
-            self.notification.update("<b>Unison</b>",text,icon)
+
+    def __update_appearances(self,icon=None,notifyheading="",notifytext="",notifyicon=None):
+        #update notification:
+        if not notifyheading == "":
+            self.notification.update("<b>" + notifyheading + "</b>",notifytext,notifyicon)
             self.notification.show()
-            return False
-        def find_relevant_message():
-            sss = self.__standardize(msg)
-            for message_list,icon in self.icons_messages:
-                for message in message_list:
-                    if sss == message:
-                        GLib.idle_add(update_icon,icon)
-                        GLib.idle_add(update_notification,msg,icon)
-                        return True 
-            return False
-        # update status message in last menu item:
-        GLib.idle_add(update_status_display,msg)
-        # update icon:
-        if not find_relevant_message():
-            try: self.blink_counter = (self.blink_counter + 1) % len(self.icons_working)
-            except AttributeError: self.blink_counter = 0 
-            GLib.idle_add(update_icon,self.icons_working[self.blink_counter])
- 
-    
-    def __standardize(self,message):
-        # I shorten and upper-case the messages in ICONS_MESSAGES
-        # and the status messages coming from unison.
-        return message[0:20].lower()    
-       
+        #update icon:
+        if self.state == STATE_RUNNING:
+            if not icon:
+                try: 
+                    self.blink_counter = (self.blink_counter + 1) % len(self.icons_working)
+                except AttributeError: self.blink_counter = 0 
+                icon = self.icons_working[self.blink_counter]
+            self.appindicator.set_icon(icon)
+        #update status messages:
+        if self.statuslist[0]:
+            msg = self.statuslist[0]
+            if len(msg) > 50:
+                msg = msg[:24] + "..." + msg[-24:]
+            msg = "[" + time.strftime("%H:%M") + "] " + msg
+            self.item_status.get_child().set_text(msg)
+        # update list of recently changed files:
+        while len(self.menu_filelist) < len(self.filelist):
+            self.menu_filelist.append(Gtk.MenuItem(''))
+        for (menu_item,f) in zip(self.menu_filelist,self.filelist):
+            menu_item.get_child().set_text(f)
+        self.menu_filelist.show_all()
+        return False # for GLib.idle_add
+        
 class OpeningDialog(Gtk.Window):
     """Opening dialog"""
     def __init__(self, wrapper):
@@ -305,7 +375,9 @@ class UnisonWrapper:
                 print "Subprocess has stopped feeding the pipe."
                 break
             else: 
-                self.indicator.add_message_to_queue(line.strip())
+                smalllines = [l for ll in line.split('\n')  for l in ll.split('\r')]
+                for l in smalllines:
+                    self.indicator.add_message_to_queue(l.strip())
                 
 
 print "Hello."
