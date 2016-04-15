@@ -1,9 +1,10 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 ########################## IMPORTS AND AUXILIARY CLASSES ###############################
 import os, threading, signal, collections, re, more_itertools
 import time
 import Queue
-from subprocess import Popen, PIPE, STDOUT
+import MySubProcess
 from gi.repository import Gtk, GObject, GLib
 from gi.repository import AppIndicator3 as AppIndicator
 from gi.repository import Notify
@@ -24,28 +25,20 @@ class MessagePattern():
         if self.icon: txt = txt + self.icon
         print txt
 ##################################  SETTINGS  ########################################
-# LIST OF COMMANDS executed, 
-# given as a list of tuples of the form (description, command).
-# The opening dialog displays this list.
-COMMANDS = (
-    ("Backup all files", "backintime --profile-id 2 -b"), 
-    ("Run unison once with -backup option", "unison XPS12-reh -backup 'Name *'"),
-    ("Run unison with -watch option","unison XPS12-reh -repeat watch"),
-#    ("Dummy","~/Scripts/dummy.sh"),
-#    ("Dummywatch","~/Scripts/dummywatch.sh"),
-    )
-# Some of the commands are selected by default in the opening dialog:
-DEFAULTS = [
-    (True, False, True),   # all commands are selected initially
-    (None, False, None)   # at the first /re/start, first command is deselected
-    ]
-         
+
 # KNOWN MESSAGES
 ICONS_WORKING = ["network-transmit","network-receive"]#ubuntu-client-updating
 ICON_WAITING =  "network-idle"    #ubuntuone-client-paused"
 ICON_GOOD = "emblem-default"      #ubuntuone-client-idle
 ICON_ERROR = "process-stop"       #ubuntuone-client-error
 END_OF_SUBPROCESS = "UNISON-WRAPPER: Subprocess has terminated"
+
+message_queue = Queue.Queue() 
+#BackUpProcess = MySubProcess.Process("~/uniIT/Scripts/unison-wrapper/dummy.sh",message_queue)
+#SyncProcess = MySubProcess.Process("~/uniIT/Scripts/unison-wrapper/dummywatch.sh",message_queue)
+BackUpProcess = MySubProcess.Process("backintime --profile-id 2 -b",message_queue)
+SyncProcess = MySubProcess.Process("unison XPS12-reh -repeat watch",message_queue)
+
 PATTERNS = []
 #PATTERNS.append(MessagePattern(pattern=r"(Alles Ok)",icon=ICON_GOOD,notifyheading=r"\1",notifytext=r"Did you know that?"))
 #PATTERNS.append(MessagePattern(pattern=r"(Fehler)",icon=ICON_ERROR,notifyheading=r"\1",notifytext=r"\1"))
@@ -54,6 +47,8 @@ PATTERNS = []
 #PATTERNS.append(MessagePattern(pattern=r"(A)",icon=ICON_GOOD,notifyheading=r"\1",notifytext=r"Did you know that?"))
 #PATTERNS.append(MessagePattern(pattern=r"B",icon=ICON_ERROR))
 #PATTERNS.append(MessagePattern(pattern=r"F",icon="gtk-home"))
+
+
 PATTERNS.append(MessagePattern(pattern=r"\[END\]\s+Updating file\s+(.*/)*([^/]+)", 
                                filelisttext=r" \2"))
 PATTERNS.append(MessagePattern(pattern=r"\[END\]\s+Copying\s+(.*/)*([^/]+)", 
@@ -64,7 +59,7 @@ PATTERNS.append(MessagePattern(pattern=r"(Synchronization complete).* \((\d+[^)]
                                notifyheading=r"\1",
                                notifytext=r"\2",
                                icon=ICON_GOOD))
-PATTERNS.append(MessagePattern(pattern=r"(Nothing to do: .*)",
+PATTERNS.append(MessagePattern(pattern=r"Nothing to do: replicas have not changed",
                                icon=ICON_GOOD))
 PATTERNS.append(MessagePattern(pattern=r"(Fatal error): (.*)",
                                notifyheading=r"\1",
@@ -85,13 +80,14 @@ PATTERNS.append(MessagePattern(pattern=r"File name too long",
 PATTERNS.append(MessagePattern(pattern=END_OF_SUBPROCESS,
                                statustext="",
                                terminate=True))
+
 ############################### ACTUAL PROGRAM #########################################
 # PROGRAM STATES:
 # (A) Waiting
 #     - at the beginning
 #     - each time the user clicks restart
 #     No background processes are running in this state.
-#     The "opening dialog" is displayed, and the panel menu has few entries.
+#     The panel menu has few entries.
 # (B) Running
 #     The commands selected (backintime, unison ...) are running in the background.
 #     The "opening dialog is hidden"
@@ -102,14 +98,13 @@ STATE_RUNNING = 1
 # CLASSES:
 # (1) MyIndicator:  Panel icon and menu
 #     initializes a separate thread that constantly watches a "message queue"
-# (2) OpeningDialog:  Opening dialog
-# (3) UnisonWrapper:  The main classes, managing calls to unison etc.
+# (2) UnisonWrapper:  The main classes, managing calls to unison etc.
 #     manages a separate thread that watches the stdout pipe of unison/... 
 #     and piles adds the output to the "message queue" of (1)
 
 class MyIndicator:
     """Panel icon and menu"""
-    def __init__(self, wrapper):
+    def __init__(self, wrapper,message_queue):
         self.appindicator = AppIndicator.Indicator.new("unison-indicator", Gtk.STOCK_INFO, AppIndicator.IndicatorCategory.SYSTEM_SERVICES)
         self.appindicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         Notify.init("unison-indicator")
@@ -117,7 +112,7 @@ class MyIndicator:
         self.wrapper = wrapper
         self.statuslist = collections.deque(maxlen=30)
         self.filelist = collections.deque(maxlen=30)
-
+        self.message_queue=message_queue
         self.known_messages = PATTERNS
         #print "Known messages:"
         #for m in self.known_messages:
@@ -148,7 +143,6 @@ class MyIndicator:
             self.menu.show_all()
         build_menu()
         self.set_state(STATE_WAITING) 
-        self.message_queue = Queue.Queue() 
         self.watch_thread = threading.Thread(target=self.__watch_message_queue)
         self.watch_thread.daemon = True
         self.watch_thread.start()
@@ -265,122 +259,115 @@ class MyIndicator:
             menu_item.get_child().set_text(f)
         self.menu_filelist.show_all()
         return False # for GLib.idle_add
-        
-class OpeningDialog(Gtk.Window):
-    """Opening dialog"""
-    def __init__(self, wrapper):
-        PADDING = 10
-        self.wrapper = wrapper
-        
-        Gtk.Window.__init__(self,title="Unison-Wrapper")
-        self.set_border_width(PADDING)
-        self.label  = Gtk.Label.new("The following commands will be executed:")
-        self.checks = []
-        for descr,cmd in wrapper.commands:
-            check_button =  Gtk.CheckButton.new_with_mnemonic(descr + " (" + cmd + ")")
-            self.checks.append(check_button)
-             
-        self.button_run = Gtk.Button.new_with_mnemonic("_Start!")
-        self.button_run.connect("clicked", self.__run_commands)        
-        self.connect("delete_event", self.hide_window)
-               
-        self.bigbox = Gtk.Box(orientation=1, spacing=0)
-        self.checksbox = Gtk.Box(orientation=1, spacing=0)
-        
-        self.add(self.bigbox)
-        self.bigbox.pack_start(child=self.label,     expand=True, fill=True,  padding=0)
-        self.bigbox.pack_start(child=self.checksbox, expand=True, fill=False, padding=PADDING)
-        for ch in self.checks:
-            self.checksbox.pack_start(child=ch, expand=True, fill=True,  padding=0)
-        self.bigbox.pack_start(child=self.button_run,     expand=True, fill=True,  padding=0)
-       
-    def set_defaults(self,defaults):
-       if defaults:
-            for checkbox,val in zip(self.checks,defaults):
-                if val != None: checkbox.set_active(val)                    
-        
-    def show_window(self,data=None):
-        self.set_position(1) # display at center of screen
-        self.show_all()
-        self.button_run.grab_focus()
-        self.present()       # in case windows was already open but got covered
-        
-    def hide_window(self,source=None,data=None):
-        self.hide()
-        return True # for delete event
-        
-    def __run_commands(self,source):
-        self.hide()
-        self.wrapper.run([checkbox.get_active() for checkbox in self.checks])        
 
 class UnisonWrapper:
     def __init__(self):
-        self.commands = COMMANDS    
-        self.defaults = DEFAULTS
-        self.dialog = OpeningDialog(self)
-        self.dialog.set_defaults(self.defaults.pop(0))
-        
-        self.indicator = MyIndicator(self)
+        self.indicator = MyIndicator(self,message_queue)
         self.process = None
         self.thread = None
-        
+        self.lock = threading.Lock()
+        self.state = STATE_WAITING
+
     def main(self):
-        self.dialog.show_window()
+        self.start()
         Gtk.main()
-        
-    def run(self,options):
-        if self.defaults: # because of "pop" in next line, the list of lists of default values will be empty after the second run
-            self.dialog.set_defaults(self.defaults.pop(0)) 
+
+    def quit(self, source):
+        self.stop(source) 
+        Notify.uninit()
+        Gtk.main_quit()
+        print "Syndicator:  Gtk has quit."
+                
+    def start(self):
+        self.lock.acquire()
+        self.state = STATE_RUNNING
         self.indicator.set_state(STATE_RUNNING)
-        command_line = "(" + " && ".join([cmd[1] for cmd,val in zip(self.commands,options) if val]) + ")" 
-        # The parentheses around the list of commands are important.
-        # Without the parentheses, stdout of the first command(s) get(s) lost.
-        print "Calling the following command in a subprocess: \n  " + "  " + command_line
-        self.process = Popen(command_line, stdout=PIPE, stderr=STDOUT, close_fds=True, shell=True, preexec_fn=os.setsid)
-        self.thread = threading.Thread(target=self.watch_pipe, args=(self.process.stdout,))
+        self.lock.release()
+
+        self.thread = threading.Thread(target=self.__run, args=())       
         self.thread.daemon = True
         self.thread.start()
 
+    def restart(self,source):
+        self.stop(source)
+        self.start()
+
     def stop(self,source):
+        print "Syndicator:  Stopping all ..."
+        self.lock.acquire()
+        self.state = STATE_WAITING
         self.indicator.set_state(STATE_WAITING)
-        if self.process:
-            os.killpg(self.process.pid, signal.SIGTERM)
-            self.process = None
-            print "Subprocess has been terminated."            
+        BackUpProcess.abort()
+        SyncProcess.abort()
+        self.lock.release()
+        
         if self.thread:
             if self.thread.isAlive():
                 self.thread.join()
                 print "Subthread has joined main thread."
             self.thread = None 
 
-    def restart(self,source):
-        self.stop(source)
-        self.dialog.show_window()
 
-    def quit(self, source):
-        self.stop(source) 
-        Notify.uninit()
-        Gtk.main_quit()
-        print "Gtk has quit."
+    def __run(self): # executed in separate thread
+        if BackUpProcess.run() == 0:
+            MIN_WAIT = 2   # two seconds
+            MAX_WAIT = 300 # five minutes
+            wait_time = MIN_WAIT
+            while self.state==STATE_RUNNING: 
+                start_time = time.time()
+                SyncProcess.run()
+                elapsed_time = time.time() - start_time
+                wait_time = (2-elapsed_time/100)*wait_time
+                wait_time = min(max(wait_time,MIN_WAIT),MAX_WAIT)
+                self.__count_down(wait_time)
 
-#    @staticmethod
-    def watch_pipe(self, pipe): 
-        while 1:  
-            line = pipe.readline() 
-            # The thread waits here until a line appears in the pipe.
-            # Don't do anything with line before "if note line", not even line.strip()!
-            if not line:
-                # This happens exactly once, namely when the process ends.
-                self.indicator.add_message_to_queue(END_OF_SUBPROCESS)
-                print "Subprocess has stopped feeding the pipe."
-                break
-            else: 
-                smalllines = [l for ll in line.split('\n')  for l in ll.split('\r')]
-                for l in smalllines:
-                    self.indicator.add_message_to_queue(l.strip())
+    def __count_down(self,seconds):
+        while seconds > 0 and self.state==STATE_RUNNING:
+            seconds = seconds - 1
+            time.sleep(1)
+            print "Retrying in %d seconds" % seconds
                 
 
-print "Hello."
+print "Syndicator:  Hello."
 GObject.threads_init()
 UnisonWrapper().main()
-print "Good bye."
+print "Syndicator:  Good bye."
+
+########################################################################################
+# Classes:
+# (Q) Message queue
+# (P) Process class
+#    derived program instances:
+#       backintime
+#       unison
+#  each instance has its own recognized messages & failure treatment
+#
+# (I) Indicator class 
+#
+# (M) Main class
+#     starts the processes
+#
+# (M) initializes (I) and starts the (P)s
+# The (P)s dump things into (Q)
+# (I) reads form (Q) and controls (M)
+#
+#
+# Threads:
+# (1) GTK-Main:
+#     used to be necessary for displaying the opening dialog; 
+#     still necessary for reacting to mouse clicks on the indicator!
+# (2) Thread for running the subprocesses:  
+#     This is a single thread started automatically in UnisonWrapper().main()
+#     executing the function UnisonWrapper.__run().
+#     The thread can be interupted and restarted via a menu entry of the indicator.
+#
+#     Messages should be evaluated and fed into message queue in standardized format:
+#       (menu message, [dialoge message])
+#     [There's no longer any need for a separate "terminate" action:
+#       The "opening dialogue" has gone.
+#       The menu item may always read "Restart" instead of "Start".
+#       There's no "waiting state" – only "failure state".]
+#
+# (3) A thread for reading from message queue (at intervals):
+#       This thread runs constantly in the background;
+#       it updates the indicator according to whatever it finds in the message queue
