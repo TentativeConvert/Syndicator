@@ -2,94 +2,104 @@
 # -*- coding: utf-8 -*-
 ########################## IMPORTS AND AUXILIARY CLASSES ###############################
 import threading, collections 
-import time
-import Queue
+import time, string, os.path
 from gi.repository import Gtk, GObject, GLib
 from gi.repository import AppIndicator3 as AppIndicator
 from gi.repository import Notify
 
-ICONS_WORKING = ["network-transmit","network-receive"]#ubuntu-client-updating
-ICON_WAITING =  "network-idle"    #ubuntuone-client-paused"
 
-STATE_WAITING = 0
-STATE_RUNNING = 1
 
 class Indicator:
     """Panel icon and menu"""
-    def __init__(self, function_restart, function_quit): 
-        self.appindicator = AppIndicator.Indicator.new("unison-indicator", Gtk.STOCK_INFO, AppIndicator.IndicatorCategory.SYSTEM_SERVICES)
+    STATE_PAUSED = 0
+    STATE_RUNNING = 1
+
+    def __init__(self, function_restart, function_pause, function_quit, update_sleep_length=0.2,icon_paused="",icon_default=""): 
+        self.appindicator = AppIndicator.Indicator.new_with_path("unison-indicator", 
+                                                                 "sync-default", 
+                                                                 AppIndicator.IndicatorCategory.SYSTEM_SERVICES,
+                                                                 os.path.dirname(os.path.realpath(__file__)) + "/icons")
         self.appindicator.set_status(AppIndicator.IndicatorStatus.ACTIVE)
         Notify.init("unison-indicator")
         self.notification = Notify.Notification.new("<b>Unison</b>","",None) # balloon notification
+        # settings:
+        self.update_sleep_length = update_sleep_length
+        self.icon_paused = icon_paused
+        self.icon_default = icon_default
         # internal data:
         self.status_list = collections.deque(maxlen=20)
         self.error_list = collections.deque(maxlen=10)
-        self.log_list = collections.deque(maxlen=30)
+        self.file_list = collections.deque(maxlen=30)
+        self.status_list_lock = threading.Lock()
+        self.file_list_lock = threading.Lock()
+        self.error_list_lock = threading.Lock()
         self.icon = ""
         self.notifytext = ""
         self.notifyheading = ""
         self.notifyicon = ""
-        # queue for receiving updates:
-        self.queue = Queue.Queue()  
-        # entries should have the format [type, time, header, text, icon]
-        # where type is one of {status, log, error, notification}
-        # e.g. 
-        #    message = {'type':"notification",
-        #               'time':"12:43",
-        #               'heading':"Unison",
-        #               'text':"Sync complete","
-        #               'icon':"OK"}
-        # Values are retrieved via
-        #    message['icon']
-        # etc. 
-        self.icons_working = ICONS_WORKING
-        self.icon_waiting = ICON_WAITING
 
-        def build_menu(function_restart,function_quit):
-            self.menu = Gtk.Menu()
-            self.menu_log_list = Gtk.Menu()
-            self.menu_error_list = Gtk.Menu()
-            self.item_start   = Gtk.MenuItem('Start ...')
-            self.item_quit    = Gtk.MenuItem('Quit')
-            self.item_log_list = Gtk.MenuItem('Recently changed files')
-            self.item_error_list = Gtk.MenuItem('Error log')
-            self.menu_log_list.append(Gtk.MenuItem('--'))
-            self.menu_error_list.append(Gtk.MenuItem('--'))
-            self.item_status = Gtk.MenuItem('')
-            self.item_status.connect('activate',self.show_status_in_dialog)
-            self.item_start.connect('activate', function_restart)
-            self.item_quit.connect('activate', function_quit)
-            self.item_log_list.set_submenu(self.menu_log_list)
-            self.item_error_list.set_submenu(self.menu_error_list)
-            menu_items = [self.item_status,
-                          self.item_log_list,
-                          self.item_error_list,
-                          Gtk.SeparatorMenuItem(),
-                          self.item_start,
-                          self.item_quit]
-            for item in menu_items:
-                self.menu.append(item)
+        # Menu
+        self.menu = Gtk.Menu()
+        self.menu_file_list = Gtk.Menu()
+        self.menu_error_list = Gtk.Menu()
+        self.item_start   = Gtk.MenuItem('Restart')
+        self.item_pause   = Gtk.MenuItem('Pause/abort')
+        self.item_quit    = Gtk.MenuItem('Quit')
+        self.item_file_list = Gtk.MenuItem('Recently changed files')
+        self.item_error_list = Gtk.MenuItem('Error log')
+        self.menu_file_list.append(Gtk.MenuItem('--'))
+        self.menu_error_list.append(Gtk.MenuItem('--'))
+        self.item_status = Gtk.MenuItem('')
+        self.item_status.connect('activate',self.show_status_in_dialog)
+        self.item_start.connect('activate', function_restart)
+        self.item_pause.connect('activate', function_pause)
+        self.item_quit.connect('activate', function_quit)
+        self.item_file_list.set_submenu(self.menu_file_list)
+        self.item_error_list.set_submenu(self.menu_error_list)
+        menu_items = [self.item_status,
+                      self.item_file_list,
+                      self.item_error_list,
+                      Gtk.SeparatorMenuItem(),
+                      self.item_start,
+                      self.item_pause,
+                      self.item_quit]
+        for item in menu_items:
+            self.menu.append(item)
             self.appindicator.set_menu(self.menu)
-            self.status_list.appendleft({'time':time.strftime("%H:%M"),'text':"Initializing ..."})
-            self.menu.show_all()
-        build_menu(function_restart,function_quit)
-        self.set_state(STATE_WAITING) 
-        self.watch_thread = threading.Thread(target=self.__watch_queue)
-        self.watch_thread.daemon = True
-        self.watch_thread.start()
-                
+        self.menu.show_all()
+
+        # Auxiliary variables:
+        self.icon_blink_counter = 0 
+        self.update_event = threading.Event()
+        self.update_thread = threading.Thread(target=self.__wait_for_updates)
+        self.update_thread.daemon = True
+
+        self.update_thread.start()
+        self.new_status("Initializing ...")
+        self.__set_state(Indicator.STATE_RUNNING)
+
+    def start(self):
+        self.__set_state(Indicator.STATE_RUNNING)
+
+    def pause(self):
+        self.__set_state(Indicator.STATE_PAUSED)
+      
     def quit(self):
         print "Indicator:  Quitting."
         Notify.uninit()
 
-    def set_state(self,state):
+    def __set_state(self,state):
         """Sets state to 'Waiting' or 'Running' and updates menu accordingly."""
         self.state = state
-        if state==STATE_RUNNING:
-            self.item_start.get_child().set_text("Restart ...")
+        if state==Indicator.STATE_PAUSED:
+            self.item_pause.hide()
+            self.new_status("PAUSED")
+            # icon muss manuell gesetzt werden 
+            # da während STATE_PAUSED das Icon nicht aktuallisiert wird 
+            GLib.idle_add(self.appindicator.set_icon,self.icon_paused)
         else:
-            self.item_start.get_child().set_text("Start ...")
-            self.appindicator.set_icon(self.icon_waiting)
+            self.item_pause.show()
+            self.new_status("RESTART",self.icon_default)
            
     def show_status_in_dialog(self,source):
         """Shows a message dialog displaying the full current status message;
@@ -100,73 +110,71 @@ class Indicator:
         dialog.run()
         dialog.destroy()
     
-#    def new_status(self,text,icon):
-#        self.status_list.appendleft({'time':msg['time'],'text':msg['text']})
-#        self.icon = msg['icon']
-    
-    def add_message_to_queue(self,message):
-        self.message_queue.put(message)   
-        
-    def __watch_queue(self):
-        """
-        main process of this class;
-        runs indefinitly in the separate thread watch_thread
-        """
-        def process_message(msg):
-            print "Indicator:  Processing message of type [%s]" % msg['type']
-            if msg['type'] == 'status':
-                self.status_list.appendleft({'time':msg['time'],'text':msg['text']})
-                self.icon = msg['icon']
-            elif msg['type'] == 'log':
-                # Remove older entries concerning the same file,
-                # so that each file is listed at most once:
-                for entry in list(self.log_list):
-                    # list(...) is needed because log_list is mutated within the for loop
-                    if entry['text'] == msg['text']:
-                        self.log_list.remove(entry)
-                self.log_list.appendleft({'time':msg['time'],'text':msg['text']})
-            elif msg['type'] == 'error':
-                self.error_list.appendleft({'time':msg['time'],'text':msg['text']})
-            elif msg['type'] == 'notification':
-                self.notifyheading = msg['heading']
-                self.notifytext = msg['text']
-                self.notifyicon = msg['icon']
-        def process_queue(q):
-            """
-            If queue is empty, wait.
-            If not, run through the whole queue and process each item.
-            """
-            msg = q.get(block=True)
-            process_message(msg)
-            q.task_done()
-            try:
-                while True:
-                    msg = q.get(block=False) 
-                    process_message(msg)
-                    q.task_done()                  
-            except Queue.Empty:
-                return
-            return  #this line should never be reached, but the interpreter wants it here
+    def new_status(self,text,icon=None):
+        self.status_list_lock.acquire()
+        self.status_list.appendleft({'time':time.strftime("%H:%M"),'text':text})
+        self.status_list_lock.release()
+        if icon:
+            self.icon = icon
+        self.update_event.set()
 
+    def new_file(self,text):
+        # Remove older entries concerning the same file,
+        # so that each file is listed at most once:
+        self.file_list_lock.acquire()
+        for entry in list(self.file_list):
+            # list(...) is needed because file_list is mutated within the for loop
+            if entry['text'] == text:
+                self.file_list.remove(entry)
+        self.file_list.appendleft({'time':time.strftime("%H:%M"),'text':text})
+        self.file_list_lock.release()
+        self.update_event.set()
+
+    def new_error(self,text):
+        self.error_list_lock.acquire()
+        self.error_list.appendleft({'time':time.strftime("%H:%M"),'text':text})
+        self.error_list_lock.release()
+        self.update_event.set()
+
+
+    def new_notification(self,text,heading=None,icon=None):
+        if heading:
+            self.notifyheading = heading
+        if icon:
+            extensions = ["svg","png"]
+            for ext in extensions:
+                testpath = os.path.dirname(os.path.realpath(__file__)) + "/icons/" + icon + "." + ext
+                if os.path.isfile(testpath):
+                    icon = testpath
+                    break
+            self.notifyicon = icon
+        self.notifytext = text
+        self.update_event.set()
+
+    def __wait_for_updates(self):
         while True:
-            process_queue(self.queue)
+            self.update_event.wait()
             GLib.idle_add(self.__update_appearances)
-            time.sleep(0.2)
+            self.update_event.clear()
+            time.sleep(self.update_sleep_length)
 
     def __update_appearances(self):
         #update notification:
-        if self.notifyheading != "":
+        if self.notifytext != "":
             self.notification.update("<b>" + self.notifyheading + "</b>",self.notifytext,self.notifyicon)
             self.notification.show()
-            self.notifyheading = ""
+            self.notifytext = ""
         #update icon:
-        if self.icon=="":
-            try: 
-                self.blink_counter = (self.blink_counter + 1) % len(self.icons_working)
-            except AttributeError: self.blink_counter = 0 
-            self.icon = self.icons_working[self.blink_counter]
-        self.appindicator.set_icon(self.icon)
+        if self.state == Indicator.STATE_RUNNING:
+            icon_list = string.split(self.icon,",")
+            no_of_icons = len(icon_list)
+            if no_of_icons > 1:
+                self.icon_blink_counter = (self.icon_blink_counter + 1) % no_of_icons
+            else:
+                self.icon_blink_counter = 0
+            self.appindicator.set_icon(icon_list[self.icon_blink_counter])
         #update status text:
+        self.status_list_lock.acquire()
         if self.status_list[0]:
             msg = self.status_list[0]
             text = msg['text']
@@ -174,34 +182,62 @@ class Indicator:
                 text = text[:24] + "..." + text[-24:]
             text = "[" + msg['time'] + "] " + text
             self.item_status.get_child().set_text(text)
+        self.status_list_lock.release()
         # update list of recently changed files:
-        while len(self.menu_log_list) < len(self.log_list):
-            self.menu_log_list.append(Gtk.MenuItem(''))
-        for (menu_item,log_entry) in zip(self.menu_log_list,self.log_list):
-            menu_item.get_child().set_text("[" + log_entry['time'] + "] " + log_entry['text'])
-        self.menu_log_list.show_all()
+        self.file_list_lock.acquire()
+        while len(self.menu_file_list) < len(self.file_list):
+            self.menu_file_list.append(Gtk.MenuItem(''))
+        for (menu_item,filename) in zip(self.menu_file_list,self.file_list):
+            menu_item.get_child().set_text("[" + filename['time'] + "] " + filename['text'])
+        self.file_list_lock.release()
+        self.menu_file_list.show_all()
         # update list of recent errors:
+        self.error_list_lock.acquire()
         while len(self.menu_error_list) < len(self.error_list):
             self.menu_error_list.append(Gtk.MenuItem(''))
         for (menu_item,error) in zip(self.menu_error_list,self.error_list):
             menu_item.get_child().set_text("[" + error['time'] + "] " + error['text'])
+        self.error_list_lock.release()
         self.menu_error_list.show_all()
 
         return False # for GLib.idle_add
 
 
-#def q(source):
-#    print "Quit"
-#def r(source):
-#    print "Restart"
-# 
-#I = Indicator(r,q)
-#Gtk.main()
-# 
-#while 1:  
-#    line = readline()
-#    print line.strip()
 
 if __name__ == "__main__":
-    # do some tests here
-    print "Indicator.py started as a script"
+    print "Running some tests with Indicator.py ..."
+    import pdb
+
+    def abort(self):
+        print "Aborting ..."
+    def quit(self):
+        print "Quitting ..."
+        Gtk.main_quit()
+    def restart(self):
+        print "Restarting ..."
+    def test():
+        i = 0
+        rest = 0.01
+        while True:
+            time.sleep(rest)
+            i = i+1
+            I.new_status(text="status"+str(i),icon="sync1,sync2")
+            time.sleep(rest)
+            I.new_error(text="error"+str(i))
+            time.sleep(rest)
+            I.new_file(text="file"+str(i%5))
+            time.sleep(rest)
+            if (i%100)==66:
+                I.new_status(text="error"+str(i),icon="sync-error")
+                time.sleep(1)
+            if (i%100)==99:
+                #I.new_notification(text="This is a notification.",heading="Test",icon=os.path.abspath("icons/sync-good.svg"))
+                I.new_notification(text="This is a notification.",heading="Test",icon="sync-good")
+                time.sleep(1)
+
+    I = Indicator(restart,abort,quit,1)
+    test_thread = threading.Thread(target=test)
+    test_thread.daemon = True
+    test_thread.start()        
+    Gtk.main()
+        

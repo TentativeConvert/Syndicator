@@ -1,23 +1,24 @@
 #!/usr/bin/python
-import os, signal, re, time, Queue
+import os, signal, re, time
 from subprocess import Popen, PIPE, STDOUT
 
-ICONS_WORKING = ["network-transmit","network-receive"]#ubuntu-client-updating
-ICON_WAITING =  "network-idle"    #ubuntuone-client-paused"
-ICON_GOOD = "emblem-default"      #ubuntuone-client-idle
-ICON_ERROR = "process-stop"       #ubuntuone-client-error
-
-class Process():
+class ExternalProcess():
     ABORTED_BY_USER = 143 
     # exit status returned by run() when process is aborted by user
     # 143 is the value returned by bash scripts when they are (immaturely) 
     # terminated by the user
 
-    def __init__(self,command,output_queue,recognized_patterns):
+    def __init__(self,command,recognized_patterns,report_status,report_error,report_file,report_notification,icon_working=""):
         print "Initializing MySubProcess.Process object for command"
         print "    " + command
         self.command = command
-        self.output_queue = output_queue
+        self.icon_working = icon_working
+        # call-back functions:
+        self.report_status = report_status
+        self.report_error = report_error
+        self.report_file = report_file
+        self.report_notification = report_notification
+
         self.process = None
         print recognized_patterns[0]
         self.patterns = [MessagePattern(pattern) for pattern in recognized_patterns]
@@ -62,12 +63,7 @@ class Process():
         # and run() should return ABORTEY_BY_USER
         
     def __process_line(self,line):
-        def add_to_queue(typ='status',text="",heading="",icon=""):
-            self.output_queue.put({'type':typ,
-                                'time':time.strftime("%H:%M"),
-                                'text':text,'heading':heading,
-                                'icon':icon})
-        print "Process:  Processing line \n    %s" % line
+        #print "Process:  Processing line \n    %s" % line
         if line == "":
             return
         for p in self.patterns:
@@ -75,23 +71,21 @@ class Process():
             if match:
                 print "Process:  Detected match with %s" % str(p.pattern.pattern)
                 status_text = match.expand(p.status_text)
-                log_text = match.expand(p.log_text)
+                file_text = match.expand(p.file_text)
                 error_text = match.expand(p.error_text)
                 notify_heading = match.expand(p.notify_heading)
                 icon = p.icon
                 if status_text: 
-                    add_to_queue(text=status_text,icon=icon)
+                    self.report_status(status_text,icon)
                 if error_text:
-                    add_to_queue(typ='error',text=error_text)
-                if log_text:
-                    add_to_queue(typ='log',text=log_text)
+                    self.report_error(error_text)
+                if file_text:
+                    self.report_file(file_text)
                 if notify_heading:
                     notify_text = match.expand(p.notify_text)
-                    add_to_queue(typ='notify',text=notify_text,heading=notify_heading,icon=icon)
+                    self.report_notification(text=notify_text,heading=notify_heading,icon=icon)
                 return
-        add_to_queue(text=line)
-
-
+        self.report_status(line,self.icon_working)
 
 class MessagePattern():
     def __init__(self, array):
@@ -102,7 +96,7 @@ class MessagePattern():
             # Raise Error here!
         # default values:
         self.status_text = r"\g<0>"
-        self.log_text = ""
+        self.file_text = ""
         self.error_text = ""
         self.notify_text = ""
         self.notify_heading = ""
@@ -110,8 +104,8 @@ class MessagePattern():
         # values specified by array:
         if array.has_key('status-text'):
             self.status_text = array['status-text']
-        if array.has_key('log-text'):
-            self.log_text = array['log-text']
+        if array.has_key('file-text'):
+            self.file_text = array['file-text']
         if array.has_key('error-text'):
             self.error_text = array['error-text']
         if array.has_key('notify-text'):
@@ -122,9 +116,47 @@ class MessagePattern():
             self.icon = array['icon']
 
     def show(self):
-        print "    pattern: %s\n    log: %s\n    error: %s\n    notify: %s\n    heading:%s\n    icon:%s" % (str(self.pattern.pattern),self.log_text,self.error_text,self.notify_text,self.notify_heading,self.icon)
+        print r"""*** PATTERN %s ***
+status-text:    %s
+file-text:      %s    
+error-text:     %s    
+notify-text:    %s    
+notify-heading: %s    
+icon:%s""" % (str(self.pattern.pattern),self.status_text,self.file_text,self.error_text,self.notify_text,self.notify_heading,self.icon)
+
+
+
 
 
 if __name__ == "__main__":
-    # do some tests here
-    print "ExternalProcess.py started as a script"
+    print "Running some tests with ExternalProcess.py."
+    import tests.dummyconfig as config
+    import threading
+
+    def report_status(text,icon):
+        print "STATUS %s, ICON %s" % (text,icon)
+    def report_file(text):
+        print "FILE %s" % text
+    def report_error(text):
+        print "ERROR %s" % text
+    def report_notification(text,heading,icon):
+        print "NOTIFICATION %s, HEADING %s, ICON %s" % (text,heading,icon)
+
+    P = ExternalProcess(command=config.sync_command,
+                        recognized_patterns=config.sync_patterns,
+                        report_status = report_status,
+                        report_file = report_file,
+                        report_error = report_error,
+                        report_notification = report_notification,
+                        icon_working = config.sync_icon_working)
+
+    def test_run():
+        P.run()
+    test_thread = threading.Thread(target=test_run)
+    test_thread.start()
+    time.sleep(2)
+    P.abort()
+    test_thread.join()
+
+    
+
