@@ -74,13 +74,11 @@ If the server is correctly configured, future calls of `ssh username@server.addr
 See http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html
 for the official manual.  
 
-Unfortunately, continuous synchronization of 'watched' folders only works with the latest version of Unison (2.48) , which is not yet available via the official Ubuntu channels.  To make things worse, Unison has many dependencies, and there doesn't seem to be a convenient launchpad repository etc. for simplifying the installation process.  The main dependency is an OCaml compiler.  Finally, you need to make sure you have the same version of Unison on both client on server, and they should be compiled with the same version of OCaml.
+Binaries for Unison 2.48.3 built for 64-bit versions of  Ubuntu 14.04  are included in the `unison-binaries` folder in this repository.  If you are running this version of Ubuntu on your client and server, you can simply copy these binaries to any folder in which the system would usually look for them, e.g. `usr/bin/` or `~/bin/`.  Then read the manual to find out how to configure your profile.
 
-> Unison 2.48 compiled with OCaml < 4.02 conflicts with Unison 2.48 compiled with OCaml 4.02!
+Unison is also available through the official Ubuntu channels and other distributions.  However, continuous synchronization of 'watched' folders only works with the very latest version of Unison (2.48).  So if the above binaries don't work for you,  you will most likely need to compile your own, for which you need an OCaml compiler.  
 
-If there are several versions of Unison on the server, you need to start Unison with the flag `--add-version-no flag`.  More precisely, starting `unison-2.48.3` on the client with `--add-version-no` will call `unison-2.48` (without subversion number) on the server, so in addition to setting this flag you will need to create a soft link `unison-2.48` on the server pointing to `unison-2.48.3`.
-
-Anyway, here's how I managed to get Unison to work on my machine running Ubuntu 14.04:
+#### Build Unison locally:
 - Install Ocaml from the software center (4.01.0-3ubuntu3).
 - Download Unison from http://www.cis.upenn.edu/~bcpierce/unison/ and unpack, e.g. to `~/Downloads/unison-2.48.3`.
 - Switch to this folder and run make:
@@ -89,16 +87,22 @@ $ cd ~/Downloads/unison-2.48.3
 $ sudo make UISTYLE=text
 ```
   Test success with `$ ./unison` -- this should display a usage message.  
-- Copy the binaries to `~/bin`:
+- Copy the binaries to `~/bin` or whereever you want them, and create a link so that you can start Unison simply by typing `unison` in the command line:
 ```
 $ mkdir ~/bin
 $ cp ~/Downloads/unison ~/bin/unison-2.48.3
 $ cp ~/Downloads/unison-fsmonitor ~/bin/unison-fsmonitor
 $ ln -s unison-2.48.3 unison
 ```
-  Calling `$ unison` should now display the same usage message as before.  
-  
-  For Unison to actually do anything, you will need to create a profile `myprofile.prf` in `~/.unison/` -- see the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).
+Calling `unison` should now display the same usage message as before.  
+
+#### Build Unison on the server:    
+This should work exactly as above.  *However, you need to make sure you have the same version of Unison on both client on server, and they should be compiled with the same version of OCaml.*  Unison 2.48 compiled with OCaml < 4.02 conflicts with Unison 2.48 compiled with OCaml 4.02!  If you're lucky and the server uses the same architecture as your client you can of course simply copy the binaries. 
+
+If there are several versions of Unison on the server, you need to start Unison with the flag `--add-version-no flag`.  More precisely, starting `unison-2.48.3` on the client with `--add-version-no` will call `unison-2.48` (without subversion number) on the server, so in addition to setting this flag you will need to create a soft link `unison-2.48` on the server pointing to `unison-2.48.3`.
+
+### Create a Unison profile:
+For Unison to actually do anything, you will need to create a profile `myprofile.prf` in `~/.unison/` -- see the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).
 
 ### Back In Time
 See http://backintime.le-web.org/
