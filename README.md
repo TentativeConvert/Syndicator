@@ -1,7 +1,7 @@
 # Syndicator
 Syndicator is a python script providing a "synchronization indicator" for the file synchronzation software [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) on Ubuntu, i.e. a dynamic icon in the Unity panel that indicates the current synchronization state.
 
-## Feature
+## Features
 Each time you log in, Syndicator will run [Back In Time](http://backintime.le-web.org/) (or some other command that you can specify) once and then try to start [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).  If running Unison fails (for example because there is no connection to the server), Syndicator keeps trying at intervals of 1, 2, 4 .... 300 seconds.  The current status is displayed in the indicator panel as follows:
 
 icon | status
@@ -99,7 +99,7 @@ Calling `unison` should now display the same usage message as before.
 #### Build Unison on the server:    
 This should work exactly as above.  *However, you need to make sure you have the same version of Unison on both client on server, and they should be compiled with the same version of OCaml.*  Unison 2.48 compiled with OCaml < 4.02 conflicts with Unison 2.48 compiled with OCaml 4.02!  If you're lucky and the server uses the same architecture as your client you can of course simply copy the binaries. 
 
-If there are several versions of Unison on the server, you need to start Unison with the flag `--add-version-no flag`.  More precisely, starting `unison-2.48.3` on the client with `--add-version-no` will call `unison-2.48` (without subversion number) on the server, so in addition to setting this flag you will need to create a soft link `unison-2.48` on the server pointing to `unison-2.48.3`.
+If there are several versions of Unison on the server, you need to start Unison with the flag `--add-version-no`.  More precisely, starting `unison-2.48.3` on the client with `--add-version-no` will call `unison-2.48` (without subversion number) on the server, so in addition to setting this flag you will need to create a soft link `unison-2.48` on the server pointing to `unison-2.48.3`.
 
 ### Create a Unison profile:
 For Unison to actually do anything, you will need to create a profile `myprofile.prf` in `~/.unison/` -- see the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).
