@@ -1,0 +1,41 @@
+*config json:*
+- command
+- list of channels {ch1, ch2, ch3, ...}
+  There are three types of channels, and the list should specify which channel is of which type:
+  - single variables (default)
+  - lists (of finite length)
+  - "compressed lists" (of finite length),
+    i.e. lists in which each entry appears only once
+- 'filters' in the form
+  { input pattern: ...,
+    output to ch1: ...,
+    output to ch2: ...,
+     etc.  }
+
+*class initialization*
+- config json
+- generic callback function signal()
+  (a call to self.signal(channel-id) signals that the channel with the specified i.e. has been updated)
+- a specific callback function for each channel
+  { 'ch1': function1, 'ch2': function2, ...}
+  functionX takes the current state of channelX as an argument
+  (just the last value, not the whole list)
+
+*method provided*
+- run()
+  starts the command as a process in a separate thread and "watches" it, filtering the output according to the filters in config.json
+- abort()
+- quit()
+- report(channel-id, all=False)
+  returns current state of the channel (the whole list if all==True)
+
+
+
+Thus, there are two ways to track the output of a certain channelX:
+
+(A) Initialize the channel-specific callback function functionX 
+    For example, this can be initialized to print channelX to the screen or to a log file.
+(B) Wait for the callback function signal() to receive channelX as argument.  Then call report(channelX) and work with whatever this channel returns.
+    For example, this can be used to update an indicator icon only periodically, or the display the last 30 log entries on demand, etc.
+
+
