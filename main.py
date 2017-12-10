@@ -1,11 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 ########################## IMPORTS AND AUXILIARY CLASSES ###############################
-import os, threading, signal, collections, re, more_itertools
+import os, threading
+#import signal, collections, re, more_itertools, GLib
 import time
-from gi.repository import Gtk, GObject, GLib
-#from gi.repository import AppIndicator3 as AppIndicator
-#from gi.repository import Notify
+from gi.repository import Gtk, GObject
 
 #import classes.DummyProcess as DummyProcess
 from ExternalProcess import ExternalProcess
