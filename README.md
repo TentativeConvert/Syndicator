@@ -1,11 +1,5 @@
 # Syndicator
-Syndicator is a python script providing a "synchronization indicator" for the file synchronzation software [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) on Ubuntu, i.e. a dynamic icon in the Unity panel that indicates the current synchronization state.  It comes in two versions: 
-
-name | language | tested on
------|----------|-----------
-Syndicator 2 | Python 2 | Ubuntu 14.04 (Unity desktop)
-Syndicator 3 | Python 3 | Ubuntu 18.04 (GNOME desktop)
-
+Syndicator is a python script providing a "synchronization indicator" for the file synchronzation software [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) on Ubuntu, i.e. a dynamic icon in the Unity panel that indicates the current synchronization state.  
 
 ## Features
 Each time you log in, Syndicator will run [Back In Time](http://backintime.le-web.org/) (or some other command that you can specify) once and then try to start [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).  If running Unison fails (for example because there is no connection to the server), Syndicator keeps trying at intervals of 1, 2, 4 .... 300 seconds.  The current status is displayed in the indicator panel as follows:
@@ -34,7 +28,16 @@ Brief details on how to set up 2-4 are included further below.
 
 ## Installation/configuration
 
-Download either the folder [syndicator2](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2) or the folder  [syndicator3](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator3), depending on which version you want / which version of Python your system supports.
+Syndicator comes in two versions:
+
+Name | Language |    | System | Desktop | Unison | Back in Time 
+-----|----------|---|--------|---|---|---
+Syndicator 2 | Python 2 | tested with:  | Ubuntu 14.04 | Unity | 2.48 | 1.0.34
+Syndicator 3 | Python 3 | tested with:  | Ubuntu 18.04 | GNOME | 2.48 | 1.1.24 
+
+![#f03c15](https://placehold.it/15/f03c15/000000?text=+) ! Due to an error in Back in Time versions 1.1.x, Syndicator 3 might synchronize files even when backing up failed. This is not usually a problem in practice, but if you are very sceptical of Unison you might prefer to use Syndicator 2 until this bug has been fixed.  See [issue #3](https://github.com/TentativeConvert/Syndicator/issues/3) for details.
+
+Once you’ve decided on a version, download either the folder [syndicator2](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2) or the folder  [syndicator3](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator3).
 
 Open `config.py`and adapt the following lines:
 ```
