@@ -34,7 +34,7 @@ Brief details on how to set up 2-4 can be found [further below](#prerequisites-i
 
 ## Installation/configuration
 
-Download either the folder [syndicator2](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2) or the folder  [syndicator3](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator3), depending on which version you want / which version of python is system supports.
+Download either the folder [syndicator2](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2) or the folder  [syndicator3](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator3), depending on which version you want / which version of Python your system supports.
 
 Open `config.py`and adapt the following lines:
 ```
@@ -52,9 +52,8 @@ Alternatively, you can include these flags as command line arguments in the valu
 Finally, make `main.py` executable (if necessary) with `chmod +x main.py`.
 You should now be able to start Syndicator with one of the following commands:
 
-syndicator2: call `python main.py` from within the folder syndicator2
-
-syndicator3: call `python -m syndicator3.main` from the *parent folder* of the folder synicator3.
+Syndicator 2: call `python main.py` from within the folder syndicator2.\\
+Syndicator 3: call `python -m syndicator3.main` from the *parent folder* of the folder synicator3.
 
 The icons used by Syndicator are essentially the UbuntuOne icons delivered with Ubuntu 14.04.  You can change these either by replacing the relevant files in the `icons` folder or by editing `config.py`.  For [at least some of the] icons in `/usr/share/icons/` you only need to supply the file name, not the full path.  
 
@@ -124,4 +123,4 @@ If there are several versions of Unison on the server, you need to start Unison 
 For Unison to actually do anything, you will need to create a profile `myprofile.prf` in `~/.unison/` -- see the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).
 
 ### Back In Time
-See http://backintime.le-web.org/
+See https://github.com/bit-team/backintime.
