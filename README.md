@@ -55,7 +55,7 @@ Alternatively, you can include these flags as command line arguments in the valu
 Finally, make `main.py` executable (if necessary) with `chmod +x main.py`.
 You should now be able to start Syndicator with one of the following commands:
 
-Syndicator 2: call `python main.py` from within the folder syndicator2.\\
+Syndicator 2: call `python main.py` from within the folder syndicator2.<br>
 Syndicator 3: call `python -m syndicator3.main` from the *parent folder* of the folder synicator3.
 
 The icons used by Syndicator are essentially the UbuntuOne icons delivered with Ubuntu 14.04.  You can change these either by replacing the relevant files in the `icons` folder or by editing `config.py`.  For [at least some of the] icons in `/usr/share/icons/` you only need to supply the file name, not the full path.  
