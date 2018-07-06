@@ -33,11 +33,13 @@ Brief details on how to set up 2-4 can be found [further below](#prerequisites-i
 
 ## Installation/configuration
 
-Download either the folder `syndicator2` or the folder `syndicator3`, depending on which version you want / which version of python is installed on your system.  (Unfortunately, `git` does not support downloading single folders, but if you have `svn` installed then according to (this answer on stackoverflow)[https://stackoverflow.com/a/18194523/3611932] you can download each folder with
+Download either the folder `syndicator2` or the folder `syndicator3`, depending on which version you want / which version of python is installed on your system.  (Unfortunately, `git` does not support downloading single folders, but if you have `svn` installed then according to [this answer on stackoverflow](https://stackoverflow.com/a/18194523/3611932) you can download each folder with
 ```
 svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator2
 svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator3
 ```
+Or click [this link](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2).
+
 Open `config.py`and adapt the following lines:
 ```
 backup_command = "backintime --profile-id 2 -b"
