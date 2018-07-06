@@ -30,7 +30,7 @@ Clicking on the first menu entry brings up a window displaying the last few (rat
 3.  a working installation of [Unison](#unison) on both client and server (version 2.48.3 or later)
 4.  (optional) a working installation of [Back In Time](#back-in-time), or of some other command line backup tool
 
-Brief details on how to set up 2-4 can be found [further below](#prerequisites-instructions).
+Brief details on how to set up 2-4 are included further below.
 
 ## Installation/configuration
 
@@ -79,7 +79,7 @@ $  cat otherkeys/id_rsa.pub >> authorized_keys
 If the server is correctly configured, future calls of `ssh username@server.address` should no longer ask for a password.  
 
 ### AppIndicator developer libraries
-The scripts rely on a Python library called AppIndicator3 -- in `Indicator.py`, on of the first lines is `from gi.repository import AppIndicator3`.  Which packages precisely you need to install in order for the this Python library to be available, I still cannot tell.  On Ubuntu 14.04 with Unity desktop, it seems the necessary Python 2 library was installed by default, but some users reported that they needed to install it manually with:
+The scripts rely on a Python library called AppIndicator3: one of the first lines in `Indicator.py` is `from gi.repository import AppIndicator3`.  Which packages precisely you need in order for this Python library to be available I do not know how to tell.  On Ubuntu 14.04 with Unity desktop, it seems the necessary Python 2 library is usually installed by default, but some users reported that they needed to install it manually with:
 ```
 $ sudo apt-get install gir1.2-appindicator3-0.1
 ```
@@ -89,14 +89,11 @@ $ sudo apt install libappindicator3-dev
 ```
 
 ### Unison
-See http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html
-for the official manual.  
+Binaries for Unison 2.48.3 built for 64-bit versions of  Ubuntu 14.04  are included in the `unison-binaries` folder in this repository, and these binaries also seem to run fine on Ubuntu 16.10 and Ubuntu 18.04.  So if you are running any of these versions of Ubuntu on your client and server, you can simply copy these binaries to any folder in which the system would usually look for them, e.g. `usr/bin/` or `~/bin/`.  Then read the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) to find out how to configure your profile.
 
-Binaries for Unison 2.48.3 built for 64-bit versions of  Ubuntu 14.04  are included in the `unison-binaries` folder in this repository.  If you are running this version of markdownUbuntu on your client and server, you can simply copy these binaries to any folder in which the system would usually look for them, e.g. `usr/bin/` or `~/bin/`.  Then read the manual to find out how to configure your profile.
+Unison is also available through the official Ubuntu channels and other distributions.  Note however that continuous synchronization of 'watched' folders only works with Unison versions ≥ 2.48.  If the above binaries don't work for you, and if no sufficiently young versions of Unison are available through your system repositories, you might need to compile your own Unison binaries.  For this, you will need an OCaml compiler.  
 
-Unison is also available through the official Ubuntu channels and other distributions.  However, continuous synchronization of 'watched' folders only works with the very latest version of Unison (2.48).  So if the above binaries don't work for you,  you will most likely need to compile your own, for which you need an OCaml compiler.  
-
-#### Build Unison locally:
+#### Build Unison locally (instructions for Ubuntu 14.04)
 - Install Ocaml from the software center (4.01.0-3ubuntu3).
 - Download Unison from http://www.cis.upenn.edu/~bcpierce/unison/ and unpack, e.g. to `~/Downloads/unison-2.48.3`.
 - Switch to this folder and run make:
@@ -119,7 +116,7 @@ This should work exactly as above.  *However, you need to make sure you have the
 
 If there are several versions of Unison on the server, you need to start Unison with the flag `--add-version-no`.  More precisely, starting `unison-2.48.3` on the client with `--add-version-no` will call `unison-2.48` (without subversion number) on the server, so in addition to setting this flag you will need to create a soft link `unison-2.48` on the server pointing to `unison-2.48.3`.
 
-### Create a Unison profile:
+#### Create a Unison profile:
 For Unison to actually do anything, you will need to create a profile `myprofile.prf` in `~/.unison/` -- see the [manual](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).
 
 ### Back In Time
