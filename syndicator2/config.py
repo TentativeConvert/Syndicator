@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 backup_command = "backintime --profile-id 2 -b"
-sync_command = "unison XPS12-reh -repeat watch"
+sync_command = "pkill -x unison-fsmonito; unison XPS12-reh -repeat watch"
 icon_paused = "sync-paused"
 icon_default = "sync-default"
 

@@ -47,6 +47,14 @@ Alternatively, you can include these flags as command line arguments in the valu
 
 Finally, make `main.py` executable (if necessary) with `chmod +x main.py` and add it to Dash > Startup Applications.
 
+Python2: call
+$ python main.py
+from the folder syndicator2.
+
+Python3: call
+$  python -m syndicator3.main
+from the parent folder, i.e. from the folder *containing* synicator3 as subfolder.
+
 The icons used by Syndicator are essentially the UbuntuOne icons delivered with Ubuntu 14.04.  You can change these either by replacing the relevant files in the `icons` folder or by editing `config.py`.  For [at least some of the] icons in `/usr/share/icons/` you only need to supply the file name, not the full path.  
 
 ## Prerequisites (instructions)
