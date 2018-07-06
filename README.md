@@ -1,5 +1,11 @@
 # Syndicator
-Syndicator is a python script providing a "synchronization indicator" for the file synchronzation software [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) on Ubuntu, i.e. a dynamic icon in the Unity panel that indicates the current synchronization state.
+Syndicator is a python script providing a "synchronization indicator" for the file synchronzation software [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html) on Ubuntu, i.e. a dynamic icon in the Unity panel that indicates the current synchronization state.  It comes in two versions: 
+
+name | language | tested on
+-----|----------|-----------
+syndicator2 | python 2 | Ubuntu 14.04 (Unity desktop)
+syndicator 3 | python 3 | Ubuntu 18.04 (gnome desktop)
+
 
 ## Features
 Each time you log in, Syndicator will run [Back In Time](http://backintime.le-web.org/) (or some other command that you can specify) once and then try to start [Unison](http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html).  If running Unison fails (for example because there is no connection to the server), Syndicator keeps trying at intervals of 1, 2, 4 .... 300 seconds.  The current status is displayed in the indicator panel as follows:
@@ -27,10 +33,10 @@ Brief details on how to set up 2-4 can be found [further below](#prerequisites-i
 
 ## Installation/configuration
 
-Download all files.  You can skip the folders `tests` and `documentation`.  Using git, you can download with:
+Download either the folder `syndicator2` or the folder `syndicator3`, depending on which version you want / which version of python is installed on your system.  (Unfortunately, `git` does not support downloading single folders, but if you have `svn` installed then according to (this answer on stackoverflow)[https://stackoverflow.com/a/18194523/3611932] you can download each folder with
 ```
-git clone --depth=1 https://github.com/TentativeConvert/Syndicator.git ~/bin/Syndicator
-rm -rf ~/bin/Syndicator/.git
+svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator2
+svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator3
 ```
 Open `config.py`and adapt the following lines:
 ```
@@ -45,15 +51,12 @@ copyonconflict = true
 ```
 Alternatively, you can include these flags as command line arguments in the value of the `sync_command`, of course. 
 
-Finally, make `main.py` executable (if necessary) with `chmod +x main.py` and add it to Dash > Startup Applications.
+Finally, make `main.py` executable (if necessary) with `chmod +x main.py`.
+You should now be able to start Syndicator with one of the following commands:
 
-Python2: call
-$ python main.py
-from the folder syndicator2.
+syndicator2: call `python main.py` from within the folder syndicator2
 
-Python3: call
-$  python -m syndicator3.main
-from the parent folder, i.e. from the folder *containing* synicator3 as subfolder.
+syndicator3: call `python -m syndicator3.main` from the *parent folder* of the folder synicator3.
 
 The icons used by Syndicator are essentially the UbuntuOne icons delivered with Ubuntu 14.04.  You can change these either by replacing the relevant files in the `icons` folder or by editing `config.py`.  For [at least some of the] icons in `/usr/share/icons/` you only need to supply the file name, not the full path.  
 
