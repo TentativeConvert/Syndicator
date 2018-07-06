@@ -3,8 +3,8 @@ Syndicator is a python script providing a "synchronization indicator" for the fi
 
 name | language | tested on
 -----|----------|-----------
-syndicator2 | python 2 | Ubuntu 14.04 (Unity desktop)
-syndicator 3 | python 3 | Ubuntu 18.04 (gnome desktop)
+Syndicator 2 | Python 2 | Ubuntu 14.04 (Unity desktop)
+Syndicator 3 | Python 3 | Ubuntu 18.04 (GNOME desktop)
 
 
 ## Features
@@ -24,21 +24,17 @@ Additional information is provided via a menu: the current output of Back In Tim
 Clicking on the first menu entry brings up a window displaying the last few (rather than just the last one) line of output from Back In Time/Unison.
 
 ## Prerequisites (overview)
-1.  Linux operating system on your client machine (tested only on Ubuntu 14.04 with Unity desktop)
-2.  ssh access to a server, preferably via public key authentication
-3.  a working installation of Unison on both client and server (version 2.48.3 or later)
-4.  (optional) a working installation of Back In Time or some other command line backup tool
+1.  Linux operating system on your client machine (tested only on Ubuntu, see above)
+2.  [AppIndicator developer libraries](#appindicator-developer-libraries) for Python
+2.  [ssh access to a server](#ssh-access-to-server-via-public-key-authentication), preferably via public key authentication
+3.  a working installation of [Unison](#unison) on both client and server (version 2.48.3 or later)
+4.  (optional) a working installation of [Back In Time](#back-in-time), or of some other command line backup tool
 
 Brief details on how to set up 2-4 can be found [further below](#prerequisites-instructions).
 
 ## Installation/configuration
 
-Download either the folder `syndicator2` or the folder `syndicator3`, depending on which version you want / which version of python is installed on your system.  (Unfortunately, `git` does not support downloading single folders, but if you have `svn` installed then according to [this answer on stackoverflow](https://stackoverflow.com/a/18194523/3611932) you can download each folder with
-```
-svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator2
-svn checkout https://github.com/TentativeConvert/Syndicator/trunk/syndicator3
-```
-Or click [this link](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2).
+Download either the folder [syndicator2](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator2) or the folder  [syndicator3](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/TentativeConvert/Syndicator/tree/master/syndicator3), depending on which version you want / which version of python is system supports.
 
 Open `config.py`and adapt the following lines:
 ```
@@ -83,11 +79,21 @@ $  cat otherkeys/id_rsa.pub >> authorized_keys
 ```
 If the server is correctly configured, future calls of `ssh username@server.address` should no longer ask for a password.  
 
+### AppIndicator developer libraries
+The scripts rely on a Python library called AppIndicator3 -- in `Indicator.py`, on of the first lines is `from gi.repository import AppIndicator3`.  Which packages precisely you need to install in order for the this Python library to be available, I still cannot tell.  On Ubuntu 14.04 with Unity desktop, it seems the necessary Python 2 library was installed by default, but some users reported that they needed to install it manually with:
+```
+$ sudo apt-get install gir1.2-appindicator3-0.1
+```
+On Ubuntu 18.04, I managed to install the corresponding Python 3 library with:
+```
+$ sudo apt install libappindicator3-dev 
+```
+
 ### Unison
 See http://www.cis.upenn.edu/~bcpierce/unison/download/releases/stable/unison-manual.html
 for the official manual.  
 
-Binaries for Unison 2.48.3 built for 64-bit versions of  Ubuntu 14.04  are included in the `unison-binaries` folder in this repository.  If you are running this version of Ubuntu on your client and server, you can simply copy these binaries to any folder in which the system would usually look for them, e.g. `usr/bin/` or `~/bin/`.  Then read the manual to find out how to configure your profile.
+Binaries for Unison 2.48.3 built for 64-bit versions of  Ubuntu 14.04  are included in the `unison-binaries` folder in this repository.  If you are running this version of markdownUbuntu on your client and server, you can simply copy these binaries to any folder in which the system would usually look for them, e.g. `usr/bin/` or `~/bin/`.  Then read the manual to find out how to configure your profile.
 
 Unison is also available through the official Ubuntu channels and other distributions.  However, continuous synchronization of 'watched' folders only works with the very latest version of Unison (2.48).  So if the above binaries don't work for you,  you will most likely need to compile your own, for which you need an OCaml compiler.  
 
