@@ -28,12 +28,13 @@ Brief details on how to set up 2-4 are included further below.
 
 ## Installation/configuration
 
-Syndicator comes in two versions:
+Syndicator comes in three versions:
 
 Name | Language |    | System | Desktop | Unison | Back in Time 
 -----|----------|---|--------|---|---|---
 Syndicator 2 | Python 2 | tested with:  | Ubuntu 14.04 | Unity | 2.48 | 1.0.34
-Syndicator 3 | Python 3 | tested with:  | Ubuntu 18.04 | GNOME | 2.48 | 1.1.24 
+Syndicator 3.1 | Python 3 | tested with:  | Ubuntu 18.04 | GNOME | 2.48 | 1.1.24 
+Syndicator 3.2 | Python 3 | tested with:  | Ubuntu 20.04 | GNOME | 2.48 | 1.2.1
 
 ![#f03c15](https://placehold.it/15/f03c15/000000?text=+) ! Due to an error in Back in Time versions 1.1.x, Syndicator 3 might synchronize files even when backing up failed. This is not usually a problem in practice, but if you are very sceptical of Unison you might prefer to use Syndicator 2 until this bug has been fixed.  See [issue #3](https://github.com/TentativeConvert/Syndicator/issues/3) for details.
 

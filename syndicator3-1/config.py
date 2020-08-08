@@ -1,10 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-#backup_command = "/usr/bin/udisksctl mount -b /dev/disk/by-uuid/ae81b5b0-0b83-4f21-a0ea-9b2c370cff04 ; backintime --profile-id 2 -b" # <--- old
 # unfortunately, udisksctl returns an ERROR if disk is already mounted! 
-backup_command = "backintime --profile-id 1 -b"
-sync_command = "pkill -x unison-fsmonito; ssh zibrowius@reh.math.uni-duesseldorf.de pkill -x unison-fsmonito; ~/bin/unison/unison-2.48 Beaver-reh.prf -repeat watch"
+backup_command = "backintime --profile-id 2 -b"
+sync_command = "pkill -x unison-fsmonito; ssh username@server pkill -x unison-fsmonito; ~/.bin/unison/unison-2.48 my-unison-profile.prf -batch=true -repeat watch"
 icon_paused = "sync-paused"
 icon_default = "sync-default"
 
